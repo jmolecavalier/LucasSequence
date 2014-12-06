@@ -102,12 +102,8 @@ main:
 #										    #
 #############################################	
 lucasSequence:
-	# $t0 will be used to determine if $a3 is equal to 1 (SEE WHAT I DID HERE?! WITH THE HAZARDS?!)
+	# $t0 will be used to determine if $a3 is equal to 1 in a few steps
 	addi	$t0, 	$0, 	1
-	# Save the passed in arguments, N, P, & Q, into the s registers.
-	sw		$a0,	$s2		# TODO: It's possible these won't be needed
-	sw		$a1,	$s3
-	sw		$a2,	$s4
 	# Determine whether or not to run the U function.
 	beq		$a3, 	$0, 	functionU
 	# Determine whether or not to run the V function.
@@ -137,7 +133,7 @@ functionV:
 	# Need to specify the formula/base case here?
 
 	# Begin the recursion by jumping to lucasSequenceNumber
-	jal lucasSequenceNumber`
+	jal lucasSequenceNumber
 	
 ############################################# 
 # Procedure: lucasSequenceNumber        	#	
@@ -155,23 +151,53 @@ functionV:
 #										    #
 #############################################	
 lucasSequenceNumber:
+	addi	$t0,	$0,		1 		# This will be used to check the base conditions in a few steps
+	
 	# Save necessary items on the stack.
-	addi	$sp,	$sp, 	-12		# Make room for three variables
-	sw		$ra, 	0($sp)
-	sw		$s4, 	4($sp)			# $s4 is the value of P * f(n - 1) [This may also need to be revisited]
-	sw		$s5, 	8($sp)			# $s5 is the value of Q * f(n - 2) [This may also need to be revisited]
+	addi	$sp,	$sp, 	-8		# Make room for the return address and a temporary
+	sw		$ra, 	4($sp)			# Store the return address
+	sw		$a0, 	0($sp)			# Save the current value of n
+	
+	# Check branch conditions.
+	beq		$a0,	$0, 	recursiveZero	# N is equal to zero and we should return the appropriate value
+	beq		$a0,	$t0,	recursiveOne	# N is equal to one and we should return the appropriate value
 
-	
+	# Determine the value of n - 1
+	addi	$a0,	$a0, 	-1		# Decrement n by 1
+	jal 	lucasSequenceNumber		# Recursively find the solution to the n - 1 case
 
-	
-	
-    ###################################
-    # Replace this code with your own #
-	###################################
-	la $a0, notYetImplemented	# not yet implemented message
-	jal printString				# print message
-	j __sysExit					# exit program
-	
+	# Determine the value of the n - 2 call
+	sw		$v0,	0($sp)			# Save the previous result
+	addi	$a0,	$a0, 	-2		# Decrement n by 2
+	jal 	lucasSequenceNumber		# Recursively find the solution to the n - 2 case
+
+	# Perform the calculations necessary to generate the number
+	lw		$t0,	$0(sp)			# Read the n - 1 value
+	mult	$t0, 	$a1 			# Multiply P * (n - 1)
+	mflo	$t1						# Move the result into $t1
+
+	mult 	$v0,	$a2 			# Multiply Q * (n - 2)
+	mflo	$t2						# Move the result into $t2
+
+	sub 	$v0,	$t1,	$t2		# Save the result of (P * (n - 1)) - (Q * (n - 2)) into $v0
+	j 		exitSequence			# Jump to the end of lucasSequenceNumber
+	# Retrieve n and save the 						
+
+# Return the base case when n = 0
+recursiveZero:
+	sw		$v0,	0($s0)			# Save the 0 base case in $v0
+	jr 		$ra 					# Return to whomever requested this value
+
+# Return the base case when n = 1
+recursiveOne:
+	sw		$v0,	0($s1)			# Save the 1 base case in $v0
+	jr 		$ra 					# Return to whomever requested this value
+
+# Exit sequence returns to lucasSequence
+exitSequence:
+	lw		$ra, 	4($sp)			# Load the correct $ra from the stack
+	addi	$sp,	$sp,	8		# Restore the stack
+	j 		$ra 					# Return 
 	
 ############################################# 
 # Procedure: scanInteger         		    #	
