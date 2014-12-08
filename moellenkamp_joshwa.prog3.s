@@ -30,6 +30,7 @@
 	notYetImplemented:	 .asciiz "\nThis procedure is not yet implemented!\n"
 	exitMessage:         .asciiz "\nThank you, come again!"
 	formatting:			 .asciiz ", "
+	boundsMessage:		 .asciiz "You have entered a non-valid entry for n. Please try again."
 	
 .text
 #############################################
@@ -65,6 +66,8 @@ main:
 	la $a0, requestNmessage   	# load message to enter integer N
 	jal scanInteger			    # print selection prompt and get user input
 	move $s0, $v0				# store n in $s0 (for now)
+
+	blez $s0, boundsError		# if n was not valid, try again
 	
 	la $a0, requestPmessage   	# load message to enter integer P
 	jal scanInteger			    # print selection prompt and get user input
@@ -76,7 +79,7 @@ main:
 	
 	move $a0, $s0				# copy n from $s0 to $a0
 	
-	jal lucasSequence			# print the lucas sequence for N, P, and Q
+	j lucasSequence				# print the lucas sequence for N, P, and Q
 
 	la $a0, newline          	# print a newline \n
 	jal printString		
@@ -139,8 +142,8 @@ functionV:
 
 # Setup for the lucasSequenceNumber function
 setup:
-	# Determine if we should be done or not
-	beq		$t7,	$s3,	returnMain
+	# Determine whether or not the sequence up to N has been generated
+	# beq		$t7,	$s3,	returnMain
 
 	# Set $a0 equal to the loop counter
 	move 	$a0,	$t7
@@ -154,18 +157,30 @@ setup:
 
 	# Print the numbers
 	jal 	printInt
-
-	# Increment $t7
+	
+	# Restore the loop variable
 	lw		$t7,	0($sp)
 	addi	$sp,	$sp, 	4
+
+	# Increment $t7 and $a0 for the purpose of checking if the loop is done
 	addi	$t7,	$t7,	1
+
+	# Determine whether or not the sequence up to N has been generated
+	beq		$t7,	$s3,	returnMain
+	
+	# Print formatting
+	jal 	printFormatting
 
 	# Call the next iteration of the loop
 	j 		setup
 
 # Return back to main from the loop counter.
 returnMain:
-	jr 		$ra
+	addi	$t7, 	$0,		0	# Reset $t7 to 0, some weird things happen when multiple formulae are run otherwise
+	la 		$a0,	newline		# Load the newline string.
+	jal 	printString			# Print a newline
+	jal 	printString			# Print a second newline
+	j 		main 				# return to main
 
 ############################################# 
 # Procedure: lucasSequenceNumber        	#	
@@ -269,6 +284,24 @@ printString:
 	jr $ra	
 
 ############################################# 
+# Procedure: boundsError   				    #	
+#############################################
+#   - print a string to console             #
+#										    #
+#   - inputs : none 					    #
+#   - outputs: none                         #  
+#										    #
+#############################################
+boundsError:
+	li $v0, 4
+	la $a0, boundsMessage
+	syscall
+	la $a0, newline
+	syscall
+	syscall
+	j  main	
+
+############################################# 
 # Procedure: printInt	 				    #	
 #############################################
 #   - print a string to console             #
@@ -281,8 +314,20 @@ printInt:
 	move $a0, $v0
 	li $v0, 1
 	syscall
-	la $a0, formatting
+	jr $ra	
+
+############################################# 
+# Procedure: printFormatting			    #	
+#############################################
+#   - print a string to console             #
+#										    #
+#   - inputs : none 					    #
+#   - outputs: none                         #  
+#										    #
+#############################################
+printFormatting:
 	li $v0, 4
+	la $a0, formatting
 	syscall
 	jr $ra	
 	
