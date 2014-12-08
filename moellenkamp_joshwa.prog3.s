@@ -29,6 +29,7 @@
 	newline:             .asciiz "\n"
 	notYetImplemented:	 .asciiz "\nThis procedure is not yet implemented!\n"
 	exitMessage:         .asciiz "\nThank you, come again!"
+	formatting:			 .asciiz ", "
 	
 .text
 #############################################
@@ -104,6 +105,11 @@ main:
 lucasSequence:
 	# $t0 will be used to determine if $a3 is equal to 1 in a few steps
 	addi	$t0, 	$0, 	1
+	# $t7 will be the counter for the loop in 'setup' below
+	addi	$s4, 	$0,		0
+	# $s3 will keep track of the overall desired number of values below
+	# This allows s3 to be changed as the programs runs to calculate the successive values
+	move 	$s3,	$a0
 	# Determine whether or not to run the U function.
 	beq		$a3, 	$0, 	functionU
 	# Determine whether or not to run the V function.
@@ -117,11 +123,9 @@ functionU:
 	add 	$s0, 	$0, 	$0
 	# Place the n = 1 base case in $s1
 	addi 	$s1,	$0,		1
-	
-	# Need to specify the formula/base case here?
 
-	# Begin the recursion by jumping to lucasSequenceNumber
-	jal		lucasSequenceNumber
+	# Jump to the recursive setup
+	j		setup
 
 # Compute the V function.
 functionV:
@@ -130,11 +134,39 @@ functionV:
 	# Place the n = 1 base case in $s1
 	add 	$s1,	$a1,	$0
 
-	# Need to specify the formula/base case here?
+	# Jump to the recursive setup
+	j 		setup
 
-	# Begin the recursion by jumping to lucasSequenceNumber
-	jal lucasSequenceNumber
-	
+# Setup for the lucasSequenceNumber function
+setup:
+	# Determine if we should be done or not
+	beq		$t7,	$s3,	returnMain
+
+	# Set $a0 equal to the loop counter
+	move 	$a0,	$t7
+
+	# Save t7 on the stack
+	addi	$sp,	$sp,	-4
+	sw		$t7,	0($sp)
+
+	# Call the recursion
+	jal 	lucasSequenceNumber
+
+	# Print the numbers
+	jal 	printInt
+
+	# Increment $t7
+	lw		$t7,	0($sp)
+	addi	$sp,	$sp, 	4
+	addi	$t7,	$t7,	1
+
+	# Call the next iteration of the loop
+	j 		setup
+
+# Return back to main from the loop counter.
+returnMain:
+	jr 		$ra
+
 ############################################# 
 # Procedure: lucasSequenceNumber        	#	
 #############################################
@@ -156,15 +188,20 @@ lucasSequenceNumber:
 	# Save necessary items on the stack.
 	addi	$sp,	$sp, 	-8		# Make room for the return address and a temporary
 	sw		$ra, 	4($sp)			# Store the return address
-	sw		$a0, 	0($sp)			# Save the current value of n
 	
-	# Check branch conditions.
+	# Pre-load the value of N for this iteration.
 	beq		$a0,	$0, 	recursiveZero	# N is equal to zero and we should return the appropriate value
 	beq		$a0,	$t0,	recursiveOne	# N is equal to one and we should return the appropriate value
+
+	# Save a copy of N
+	sw 		$a0, 	0($sp)
 
 	# Determine the value of n - 1
 	addi	$a0,	$a0, 	-1		# Decrement n by 1
 	jal 	lucasSequenceNumber		# Recursively find the solution to the n - 1 case
+
+	# Retrieve N
+	lw 		$a0,	0($sp)
 
 	# Determine the value of the n - 2 call
 	sw		$v0,	0($sp)			# Save the previous result
@@ -172,32 +209,28 @@ lucasSequenceNumber:
 	jal 	lucasSequenceNumber		# Recursively find the solution to the n - 2 case
 
 	# Perform the calculations necessary to generate the number
-	lw		$t0,	$0(sp)			# Read the n - 1 value
-	mult	$t0, 	$a1 			# Multiply P * (n - 1)
-	mflo	$t1						# Move the result into $t1
+	lw		$t4,	0($sp)			# Read the n - 1 value
+	mult	$t4, 	$a1 			# Multiply P * (n - 1)
+	mflo	$t3						# Move the result into $t3
 
 	mult 	$v0,	$a2 			# Multiply Q * (n - 2)
 	mflo	$t2						# Move the result into $t2
 
-	sub 	$v0,	$t1,	$t2		# Save the result of (P * (n - 1)) - (Q * (n - 2)) into $v0
-	j 		exitSequence			# Jump to the end of lucasSequenceNumber
-	# Retrieve n and save the 						
-
-# Return the base case when n = 0
-recursiveZero:
-	sw		$v0,	0($s0)			# Save the 0 base case in $v0
-	jr 		$ra 					# Return to whomever requested this value
-
-# Return the base case when n = 1
-recursiveOne:
-	sw		$v0,	0($s1)			# Save the 1 base case in $v0
-	jr 		$ra 					# Return to whomever requested this value
-
-# Exit sequence returns to lucasSequence
+	sub 	$v0,	$t3,	$t2		# Save the result of (P * (n - 1)) - (Q * (n - 2)) into $v0				
 exitSequence:
 	lw		$ra, 	4($sp)			# Load the correct $ra from the stack
 	addi	$sp,	$sp,	8		# Restore the stack
-	j 		$ra 					# Return 
+	jr 		$ra 					# Return 
+
+# Return the base case when n = 0
+recursiveZero:
+	move	$v0,	$s0     		# Save the 0 base case
+	j 		exitSequence			# Return to caller
+
+# Return the base case when n = 1
+recursiveOne:
+	move	$v0,	$s1     		# Save the 1 base case
+	j 		exitSequence			# Return to caller
 	
 ############################################# 
 # Procedure: scanInteger         		    #	
@@ -231,6 +264,24 @@ scanInteger:
 #										    #
 #############################################
 printString:
+	li $v0, 4
+	syscall
+	jr $ra	
+
+############################################# 
+# Procedure: printInt	 				    #	
+#############################################
+#   - print a string to console             #
+#										    #
+#   - inputs : $v0 - address of string      #
+#   - outputs: none                         #  
+#										    #
+#############################################
+printInt:
+	move $a0, $v0
+	li $v0, 1
+	syscall
+	la $a0, formatting
 	li $v0, 4
 	syscall
 	jr $ra	
